@@ -1,34 +1,33 @@
 import argparse
-import socket  # La libreria fondamentale per il networking
+import socket
+import concurrent.futures # Libreria standard Python per gestire i thread
 
 def scan_port(ip, port):
-    # Creiamo un socket (un "cavo di rete virtuale")
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-    # Impostiamo un timeout (0.5 sec) per non aspettare in eterno se il server non risponde
-    s.settimeout(0.5) 
-    
-    # connect_ex prova a connettersi. Se ci riesce restituisce il numero 0
-    risultato = s.connect_ex((ip, port))
-    
-    if risultato == 0:
-        print(f"[+] Porta {port} APERTA su {ip}")
-    else:
-        print(f"[-] Porta {port} CHIUSA su {ip}")
+    # Uso 'with' così il socket si chiude in automatico alla fine (best practice)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5) 
+        risultato = s.connect_ex((ip, port))
         
-    s.close() # Regola d'oro: chiudere sempre il socket dopo averlo usato
+        if risultato == 0:
+            print(f"[+] Porta {port}/TCP APERTA su {ip}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Uno scanner di rete semplice.")
-    parser.add_argument("-t", "--target", required=True, help="L'indirizzo IP da scansionare")
+    parser = argparse.ArgumentParser(description="Port Scanner Multi-Thread TCP")
+    parser.add_argument("-t", "--target", required=True, help="Indirizzo IP target")
+    # Aggiungiamo un nuovo parametro per scegliere quante porte scansionare
+    parser.add_argument("-p", "--ports", type=int, default=1024, help="Num. porte (default: 1024)")
     args = parser.parse_args()
 
-    print(f"[*] Inizio scansione verso il target: {args.target}")
-    
-    # Invece di una porta sola, ora testiamo SSH (22), HTTP (80) e HTTPS (443)
-    porte_da_testare = [22, 80, 443]
-    for port in porte_da_testare:
-        scan_port(args.target, port)
+    print(f"[*] Inizio scansione su {args.target} (Prime {args.ports} porte)...")
+    print(f"[*] Uso ThreadPoolExecutor per velocizzare l'esecuzione\n")
+
+    # Refactoring: Usiamo un ThreadPool per lanciare le scansioni in parallelo
+    # max_workers=50 significa che controllerà fino a 50 porte contemporaneamente
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+        for port in range(1, args.ports + 1):
+            executor.submit(scan_port, args.target, port)
+
+    print("\n[*] Scansione completata.")
 
 if __name__ == "__main__":
     main()
